@@ -142,4 +142,6 @@ pub trait CapitalDotComEndpoints {
         from: String,
         to: String,
     ) -> Result<Response, CapitalDotComError<Response>>;
+
+    fn has_credentials<T>(&self) -> Result<(), CapitalDotComError<T>>;
 }

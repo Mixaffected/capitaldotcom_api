@@ -13,11 +13,13 @@ use reqwest::{
 };
 use serde::{Deserialize, Serialize};
 
-pub mod responses;
+mod responses;
 
 mod enums;
 mod request_bodies;
 mod traits;
+
+pub use traits::CapitalDotComInterface;
 
 use traits::Reqwest;
 
@@ -142,6 +144,8 @@ impl traits::CapitalDotComEndpoints for CapitalDotComAPI {
     }
 
     async fn ping(&self) -> Result<Response, CapitalDotComError<Response>> {
+        self.has_credentials()?;
+
         match self
             .http_client
             .get(Self::get_url(&self, "/api/v1/ping"))
@@ -168,6 +172,8 @@ impl traits::CapitalDotComEndpoints for CapitalDotComAPI {
     }
 
     async fn get_session_details(&self) -> Result<Response, CapitalDotComError<Response>> {
+        self.has_credentials()?;
+
         match self
             .http_client
             .get(Self::get_url(&self, "/api/v1/session"))
@@ -202,6 +208,8 @@ impl traits::CapitalDotComEndpoints for CapitalDotComAPI {
         &self,
         account_id: String,
     ) -> Result<Response, CapitalDotComError<Response>> {
+        self.has_credentials()?;
+
         let body =
             Self::get_json_from_value(request_bodies::SwitchActiveAccountBody::new(account_id))?;
 
@@ -220,6 +228,8 @@ impl traits::CapitalDotComEndpoints for CapitalDotComAPI {
     }
 
     async fn session_log_out(&self) -> Result<Response, CapitalDotComError<Response>> {
+        self.has_credentials()?;
+
         match self
             .http_client
             .delete(Self::get_url(&self, "/api/v1/session"))
@@ -233,6 +243,8 @@ impl traits::CapitalDotComEndpoints for CapitalDotComAPI {
     }
 
     async fn get_all_accounts(&self) -> Result<Response, CapitalDotComError<Response>> {
+        self.has_credentials()?;
+
         match self
             .http_client
             .get(Self::get_url(&self, "/api/v1/accounts"))
@@ -249,6 +261,8 @@ impl traits::CapitalDotComEndpoints for CapitalDotComAPI {
         &self,
         deal_reference: String,
     ) -> Result<Response, CapitalDotComError<Response>> {
+        self.has_credentials()?;
+
         match self
             .http_client
             .get(Self::get_url(
@@ -265,6 +279,8 @@ impl traits::CapitalDotComEndpoints for CapitalDotComAPI {
     }
 
     async fn get_all_positions(&self) -> Result<Response, CapitalDotComError<Response>> {
+        self.has_credentials()?;
+
         match self
             .http_client
             .get(Self::get_url(&self, "/api/v1/positions"))
@@ -281,6 +297,8 @@ impl traits::CapitalDotComEndpoints for CapitalDotComAPI {
         &self,
         position_data: request_bodies::CreatePositionBody,
     ) -> Result<Response, CapitalDotComError<Response>> {
+        self.has_credentials()?;
+
         let body = Self::get_json_from_value(position_data)?;
 
         match self
@@ -301,6 +319,8 @@ impl traits::CapitalDotComEndpoints for CapitalDotComAPI {
         &self,
         deal_id: String,
     ) -> Result<Response, CapitalDotComError<Response>> {
+        self.has_credentials()?;
+
         match self
             .http_client
             .get(Self::get_url(
@@ -321,6 +341,8 @@ impl traits::CapitalDotComEndpoints for CapitalDotComAPI {
         deal_id: String,
         position_update_data: request_bodies::PositionUpdateBody,
     ) -> Result<Response, CapitalDotComError<Response>> {
+        self.has_credentials()?;
+
         let body = Self::get_json_from_value(position_update_data)?;
 
         match self
@@ -344,6 +366,8 @@ impl traits::CapitalDotComEndpoints for CapitalDotComAPI {
         &self,
         deal_id: String,
     ) -> Result<Response, CapitalDotComError<Response>> {
+        self.has_credentials()?;
+
         match self
             .http_client
             .delete(Self::get_url(
@@ -364,6 +388,8 @@ impl traits::CapitalDotComEndpoints for CapitalDotComAPI {
         search_term: String,
         epics: Vec<String>,
     ) -> Result<Response, CapitalDotComError<Response>> {
+        self.has_credentials()?;
+
         if epics.len() > 50 {
             return Err(CapitalDotComError::TooManyParameters);
         }
@@ -398,6 +424,8 @@ impl traits::CapitalDotComEndpoints for CapitalDotComAPI {
         &self,
         epic: String,
     ) -> Result<Response, CapitalDotComError<Response>> {
+        self.has_credentials()?;
+
         match self
             .http_client
             .get(Self::get_url(&self, &format!("/api/v1/markets/{}", epic)))
@@ -418,6 +446,8 @@ impl traits::CapitalDotComEndpoints for CapitalDotComAPI {
         from: String,
         to: String,
     ) -> Result<Response, CapitalDotComError<Response>> {
+        self.has_credentials()?;
+
         match self
             .http_client
             .get(Self::get_url(&self, &format!("/api/v1/prices/{}", epic)))
@@ -433,6 +463,14 @@ impl traits::CapitalDotComEndpoints for CapitalDotComAPI {
         {
             Ok(response) => Ok(response),
             Err(e) => Err(CapitalDotComError::ReqwestError(e)),
+        }
+    }
+
+    fn has_credentials<T>(&self) -> Result<(), CapitalDotComError<T>> {
+        if !self.x_security_token.is_empty() || !self.cst.is_empty() {
+            Ok(())
+        } else {
+            Err(CapitalDotComError::MissingAuthorization)
         }
     }
 }
@@ -451,6 +489,8 @@ pub enum CapitalDotComError<ErrD> {
     HeaderNotFound,
     FromUtf8Error(FromUtf8Error),
     TooManyParameters,
+    Unauthorized,
+    MissingAuthorization,
 }
 
 #[cfg(test)]
