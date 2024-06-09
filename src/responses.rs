@@ -6,6 +6,12 @@ type Timestamp = i64;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct APIError {
+    pub error_code: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ServerTimeResponse {
     pub server_time: Timestamp,
 }
@@ -134,14 +140,14 @@ pub struct AffectedDeal {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AllPositionsResponse {
-    pub positions: Vec<Position>,
+    pub positions: Vec<PositionResponse>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Position {
+pub struct PositionResponse {
     pub position: PositionData,
-    pub market: Market,
+    pub market: MarketPosition,
 }
 
 #[derive(Debug, Deserialize)]
@@ -164,7 +170,7 @@ pub struct PositionData {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Market {
+pub struct MarketPosition {
     pub instrument_name: String,
     pub expiry: String,
     pub market_status: MarketStatus,
@@ -188,8 +194,40 @@ pub struct Market {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PositionResponse {
+pub struct Market {
+    pub delay_time: f64,
+    pub epic: String,
+    pub symbol: String,
+    pub net_change: f64,
+    pub lot_size: i32,
+    pub expiry: String,
+    pub instrument_type: enums::InstrumentType,
+    pub instrument_name: String,
+    pub high: f64,
+    pub low: f64,
+    pub percentage_change: f64,
+    pub update_time: String,
+    pub update_time_utc: String,
+    pub bid: f64,
+    pub offer: f64,
+    pub streaming_prices_available: bool,
+    pub market_status: MarketStatus,
+    pub scaling_factor: i32,
+    pub market_modes: Vec<String>,
+    pub pip_position: i32,
+    pub tick_size: f64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DealReferenceResponse {
     pub deal_reference: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MarketDetailsResponse {
+    pub markets: Vec<Market>,
 }
 
 #[derive(Debug, Deserialize)]

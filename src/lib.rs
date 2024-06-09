@@ -1,17 +1,7 @@
-use std::{
-    result,
-    str::Utf8Error,
-    string::FromUtf8Error,
-    sync::{Arc, Mutex},
-    thread, time,
-};
+use std::{collections::HashMap, string::FromUtf8Error, time};
 
-use chrono::Utc;
-use reqwest::{
-    header::{HeaderMap, HeaderValue},
-    Response, StatusCode,
-};
-use serde::{Deserialize, Serialize};
+use reqwest::header::{HeaderMap, HeaderValue};
+use serde::Serialize;
 
 mod responses;
 
@@ -21,7 +11,7 @@ mod traits;
 
 pub use traits::CapitalDotComInterface;
 
-use traits::Reqwest;
+use traits::ReqwestUtils;
 
 /// Limitations:
 ///  * Max of 10 requests per second
@@ -100,20 +90,12 @@ impl CapitalDotComAPI {
         self.last_request_timestamp = chrono::Utc::now();
     }
 
-    fn get_header_value(headers: &HeaderMap, key: &str) -> String {
-        match headers.get(key) {
-            Some(x_security_token) => {
-                String::from_utf8_lossy(x_security_token.as_bytes()).to_string()
-            }
-            None => String::new(),
-        }
-    }
-
-    fn update_auth(&mut self, response: &Response) {
-        let headers = response.headers();
-
-        self.x_security_token = Self::get_header_value(headers, "X-SECURITY-TOKEN");
-        self.cst = Self::get_header_value(headers, "CST");
+    fn update_auth(&mut self, headers: &HashMap<String, String>) {
+        self.x_security_token = headers
+            .get("X-SECURITY-TOKEN")
+            .unwrap_or(&String::new())
+            .to_owned();
+        self.cst = headers.get("CST").unwrap_or(&String::new()).to_owned();
 
         let mut header_map = HeaderMap::new();
         header_map.append(
@@ -124,228 +106,270 @@ impl CapitalDotComAPI {
             "CST",
             HeaderValue::from_str(&self.cst).expect("cst too large!"),
         );
+
         self.auth_header_map = header_map;
     }
 }
 
-impl traits::Reqwest for CapitalDotComAPI {}
+impl traits::ReqwestUtils for CapitalDotComAPI {}
 
 impl traits::CapitalDotComEndpoints for CapitalDotComAPI {
-    async fn get_server_time(&self) -> Result<Response, CapitalDotComError<Response>> {
-        match self
-            .http_client
-            .get(Self::get_url(&self, "/api/v1/time"))
-            .send()
-            .await
-        {
-            Ok(response) => Ok(response),
-            Err(e) => Err(CapitalDotComError::ReqwestError(e)),
-        }
+    async fn get_server_time(
+        &self,
+    ) -> Result<
+        (u16, HashMap<String, String>, responses::ServerTimeResponse),
+        CapitalDotComError<responses::ServerTimeResponse>,
+    > {
+        let request_builder = self.http_client.get(Self::get_url(&self, "/api/v1/time"));
+
+        Self::request_data(request_builder).await
     }
 
-    async fn ping(&self) -> Result<Response, CapitalDotComError<Response>> {
+    async fn ping(
+        &self,
+    ) -> Result<
+        (u16, HashMap<String, String>, responses::PingResponse),
+        CapitalDotComError<responses::PingResponse>,
+    > {
         self.has_credentials()?;
 
-        match self
+        let request_builder = self
             .http_client
             .get(Self::get_url(&self, "/api/v1/ping"))
-            .headers(self.auth_header_map.clone())
-            .send()
-            .await
-        {
-            Ok(response) => Ok(response),
-            Err(e) => Err(CapitalDotComError::ReqwestError(e)),
-        }
+            .headers(self.auth_header_map.clone());
+
+        Self::request_data(request_builder).await
     }
 
-    async fn get_encryption_key(&self) -> Result<Response, CapitalDotComError<Response>> {
-        match self
+    async fn get_encryption_key(
+        &self,
+    ) -> Result<
+        (
+            u16,
+            HashMap<String, String>,
+            responses::EncryptionKeyResponse,
+        ),
+        CapitalDotComError<responses::EncryptionKeyResponse>,
+    > {
+        let request_builder = self
             .http_client
             .get(Self::get_url(&self, "/api/v1/session/encryptionKey"))
-            .header("X-CAP-API-KEY", &self.x_cap_api_key)
-            .send()
-            .await
-        {
-            Ok(response) => Ok(response),
-            Err(e) => Err(CapitalDotComError::ReqwestError(e)),
-        }
+            .header("X-CAP-API-KEY", &self.x_cap_api_key);
+
+        Self::request_data(request_builder).await
     }
 
-    async fn get_session_details(&self) -> Result<Response, CapitalDotComError<Response>> {
+    async fn get_session_details(
+        &self,
+    ) -> Result<
+        (
+            u16,
+            HashMap<String, String>,
+            responses::SessionDetailsResponse,
+        ),
+        CapitalDotComError<responses::SessionDetailsResponse>,
+    > {
         self.has_credentials()?;
 
-        match self
+        let request_builder = self
             .http_client
             .get(Self::get_url(&self, "/api/v1/session"))
-            .headers(self.auth_header_map.clone())
-            .send()
-            .await
-        {
-            Ok(response) => Ok(response),
-            Err(e) => Err(CapitalDotComError::ReqwestError(e)),
-        }
+            .headers(self.auth_header_map.clone());
+
+        Self::request_data(request_builder).await
     }
 
-    async fn create_new_session(&mut self) -> Result<Response, CapitalDotComError<Response>> {
-        let response = match self
+    async fn create_new_session(
+        &mut self,
+    ) -> Result<
+        (
+            u16,
+            HashMap<String, String>,
+            responses::CreateNewSessionResponse,
+        ),
+        CapitalDotComError<responses::CreateNewSessionResponse>,
+    > {
+        let request_builder = self
             .http_client
             .post(Self::get_url(&self, "/api/v1/session/encryptionKey"))
-            .header("X-CAP-API-KEY", &self.x_cap_api_key)
-            .send()
-            .await
-        {
-            Ok(response) => response,
-            Err(e) => return Err(CapitalDotComError::ReqwestError(e)),
-        };
+            .header("X-CAP-API-KEY", &self.x_cap_api_key);
+
+        let (status, headers, body) = Self::request_data(request_builder).await?;
 
         // Update authorization values
-        self.update_auth(&response);
+        self.update_auth(&headers);
 
-        Ok(response)
+        Ok((status, headers, body))
     }
 
     async fn switch_active_account(
         &self,
         account_id: String,
-    ) -> Result<Response, CapitalDotComError<Response>> {
+    ) -> Result<
+        (
+            u16,
+            HashMap<String, String>,
+            responses::SwitchAccountResponse,
+        ),
+        CapitalDotComError<responses::SwitchAccountResponse>,
+    > {
         self.has_credentials()?;
 
         let body =
             Self::get_json_from_value(request_bodies::SwitchActiveAccountBody::new(account_id))?;
 
-        match self
+        let request_builder = self
             .http_client
             .put(Self::get_url(&self, "/api/v1/session"))
             .headers(self.auth_header_map.clone())
             .header("Content-Type", "application/json")
-            .body(body)
-            .send()
-            .await
-        {
-            Ok(response) => Ok(response),
-            Err(e) => Err(CapitalDotComError::ReqwestError(e)),
-        }
+            .body(body);
+
+        Self::request_data(request_builder).await
     }
 
-    async fn session_log_out(&self) -> Result<Response, CapitalDotComError<Response>> {
+    async fn session_log_out(
+        &self,
+    ) -> Result<
+        (
+            u16,
+            HashMap<String, String>,
+            responses::SessionLogOutResponse,
+        ),
+        CapitalDotComError<responses::SessionLogOutResponse>,
+    > {
         self.has_credentials()?;
 
-        match self
+        let request_builder = self
             .http_client
             .delete(Self::get_url(&self, "/api/v1/session"))
-            .headers(self.auth_header_map.clone())
-            .send()
-            .await
-        {
-            Ok(response) => Ok(response),
-            Err(e) => Err(CapitalDotComError::ReqwestError(e)),
-        }
+            .headers(self.auth_header_map.clone());
+
+        Self::request_data(request_builder).await
     }
 
-    async fn get_all_accounts(&self) -> Result<Response, CapitalDotComError<Response>> {
+    async fn get_all_accounts(
+        &self,
+    ) -> Result<
+        (u16, HashMap<String, String>, responses::AllAccountsResponse),
+        CapitalDotComError<responses::AllAccountsResponse>,
+    > {
         self.has_credentials()?;
 
-        match self
+        let request_builder = self
             .http_client
             .get(Self::get_url(&self, "/api/v1/accounts"))
-            .headers(self.auth_header_map.clone())
-            .send()
-            .await
-        {
-            Ok(response) => Ok(response),
-            Err(e) => Err(CapitalDotComError::ReqwestError(e)),
-        }
+            .headers(self.auth_header_map.clone());
+
+        Self::request_data(request_builder).await
     }
 
     async fn order_confirmation(
         &self,
         deal_reference: String,
-    ) -> Result<Response, CapitalDotComError<Response>> {
+    ) -> Result<
+        (
+            u16,
+            HashMap<String, String>,
+            responses::OrderConfirmationResponse,
+        ),
+        CapitalDotComError<responses::OrderConfirmationResponse>,
+    > {
         self.has_credentials()?;
 
-        match self
+        let request_builder = self
             .http_client
             .get(Self::get_url(
                 &self,
                 &format!("/api/v1/confirms/{}", deal_reference),
             ))
-            .headers(self.auth_header_map.clone())
-            .send()
-            .await
-        {
-            Ok(response) => Ok(response),
-            Err(e) => Err(CapitalDotComError::ReqwestError(e)),
-        }
+            .headers(self.auth_header_map.clone());
+
+        Self::request_data(request_builder).await
     }
 
-    async fn get_all_positions(&self) -> Result<Response, CapitalDotComError<Response>> {
+    async fn get_all_positions(
+        &self,
+    ) -> Result<
+        (
+            u16,
+            HashMap<String, String>,
+            responses::AllPositionsResponse,
+        ),
+        CapitalDotComError<responses::AllPositionsResponse>,
+    > {
         self.has_credentials()?;
 
-        match self
+        let request_builder = self
             .http_client
             .get(Self::get_url(&self, "/api/v1/positions"))
-            .headers(self.auth_header_map.clone())
-            .send()
-            .await
-        {
-            Ok(response) => Ok(response),
-            Err(e) => Err(CapitalDotComError::ReqwestError(e)),
-        }
+            .headers(self.auth_header_map.clone());
+
+        Self::request_data(request_builder).await
     }
 
     async fn create_position(
         &self,
         position_data: request_bodies::CreatePositionBody,
-    ) -> Result<Response, CapitalDotComError<Response>> {
+    ) -> Result<
+        (
+            u16,
+            HashMap<String, String>,
+            responses::DealReferenceResponse,
+        ),
+        CapitalDotComError<responses::DealReferenceResponse>,
+    > {
         self.has_credentials()?;
 
         let body = Self::get_json_from_value(position_data)?;
 
-        match self
+        let request_builder = self
             .http_client
             .post(Self::get_url(&self, "/api/v1/positions"))
             .headers(self.auth_header_map.clone())
             .header("Content-Type", "application/json")
-            .body(body)
-            .send()
-            .await
-        {
-            Ok(response) => Ok(response),
-            Err(e) => Err(CapitalDotComError::ReqwestError(e)),
-        }
+            .body(body);
+
+        Self::request_data(request_builder).await
     }
 
     async fn get_position(
         &self,
         deal_id: String,
-    ) -> Result<Response, CapitalDotComError<Response>> {
+    ) -> Result<
+        (u16, HashMap<String, String>, responses::PositionResponse),
+        CapitalDotComError<responses::PositionResponse>,
+    > {
         self.has_credentials()?;
 
-        match self
+        let request_builder = self
             .http_client
             .get(Self::get_url(
                 &self,
                 &format!("/api/v1/positions/{}", deal_id),
             ))
-            .headers(self.auth_header_map.clone())
-            .send()
-            .await
-        {
-            Ok(response) => Ok(response),
-            Err(e) => Err(CapitalDotComError::ReqwestError(e)),
-        }
+            .headers(self.auth_header_map.clone());
+
+        Self::request_data(request_builder).await
     }
 
     async fn update_position(
         &self,
         deal_id: String,
         position_update_data: request_bodies::PositionUpdateBody,
-    ) -> Result<Response, CapitalDotComError<Response>> {
+    ) -> Result<
+        (
+            u16,
+            HashMap<String, String>,
+            responses::DealReferenceResponse,
+        ),
+        CapitalDotComError<responses::DealReferenceResponse>,
+    > {
         self.has_credentials()?;
 
         let body = Self::get_json_from_value(position_update_data)?;
 
-        match self
+        let request_builder = self
             .http_client
             .put(Self::get_url(
                 &self,
@@ -353,41 +377,47 @@ impl traits::CapitalDotComEndpoints for CapitalDotComAPI {
             ))
             .headers(self.auth_header_map.clone())
             .header("Content-Type", "application/json")
-            .body(body)
-            .send()
-            .await
-        {
-            Ok(response) => Ok(response),
-            Err(e) => Err(CapitalDotComError::ReqwestError(e)),
-        }
+            .body(body);
+
+        Self::request_data(request_builder).await
     }
 
     async fn close_position(
         &self,
         deal_id: String,
-    ) -> Result<Response, CapitalDotComError<Response>> {
+    ) -> Result<
+        (
+            u16,
+            HashMap<String, String>,
+            responses::DealReferenceResponse,
+        ),
+        CapitalDotComError<responses::DealReferenceResponse>,
+    > {
         self.has_credentials()?;
 
-        match self
+        let request_builder = self
             .http_client
             .delete(Self::get_url(
                 &self,
                 &format!("/api/v1/positions/{}", deal_id),
             ))
-            .headers(self.auth_header_map.clone())
-            .send()
-            .await
-        {
-            Ok(response) => Ok(response),
-            Err(e) => Err(CapitalDotComError::ReqwestError(e)),
-        }
+            .headers(self.auth_header_map.clone());
+
+        Self::request_data(request_builder).await
     }
 
     async fn get_market_details(
         &self,
         search_term: String,
         epics: Vec<String>,
-    ) -> Result<Response, CapitalDotComError<Response>> {
+    ) -> Result<
+        (
+            u16,
+            HashMap<String, String>,
+            responses::MarketDetailsResponse,
+        ),
+        CapitalDotComError<responses::MarketDetailsResponse>,
+    > {
         self.has_credentials()?;
 
         if epics.len() > 50 {
@@ -403,39 +433,40 @@ impl traits::CapitalDotComEndpoints for CapitalDotComAPI {
             }
         }
 
-        let mut request = self
+        let mut request_builder = self
             .http_client
             .get(Self::get_url(&self, "/api/v1/markets"))
             .headers(self.auth_header_map.clone());
 
         if epic_query.is_empty() {
-            request = request.query(&[("searchTerm", search_term)]);
+            request_builder = request_builder.query(&[("searchTerm", search_term)]);
         } else {
-            request = request.query(&[("searchTerm", search_term), ("epics", epic_query)]);
+            request_builder =
+                request_builder.query(&[("searchTerm", search_term), ("epics", epic_query)]);
         }
 
-        match request.send().await {
-            Ok(response) => Ok(response),
-            Err(e) => Err(CapitalDotComError::ReqwestError(e)),
-        }
+        Self::request_data(request_builder).await
     }
 
     async fn single_market_details(
         &self,
         epic: String,
-    ) -> Result<Response, CapitalDotComError<Response>> {
+    ) -> Result<
+        (
+            u16,
+            HashMap<String, String>,
+            responses::SingleMarketDetailsResponse,
+        ),
+        CapitalDotComError<responses::SingleMarketDetailsResponse>,
+    > {
         self.has_credentials()?;
 
-        match self
+        let request_builder = self
             .http_client
             .get(Self::get_url(&self, &format!("/api/v1/markets/{}", epic)))
-            .headers(self.auth_header_map.clone())
-            .send()
-            .await
-        {
-            Ok(response) => Ok(response),
-            Err(e) => Err(CapitalDotComError::ReqwestError(e)),
-        }
+            .headers(self.auth_header_map.clone());
+
+        Self::request_data(request_builder).await
     }
 
     async fn get_historical_prices(
@@ -445,10 +476,17 @@ impl traits::CapitalDotComEndpoints for CapitalDotComAPI {
         max: i32,
         from: String,
         to: String,
-    ) -> Result<Response, CapitalDotComError<Response>> {
+    ) -> Result<
+        (
+            u16,
+            HashMap<String, String>,
+            responses::HistoricalPricesResponse,
+        ),
+        CapitalDotComError<responses::HistoricalPricesResponse>,
+    > {
         self.has_credentials()?;
 
-        match self
+        let request_builder = self
             .http_client
             .get(Self::get_url(&self, &format!("/api/v1/prices/{}", epic)))
             .query(&[
@@ -457,13 +495,9 @@ impl traits::CapitalDotComEndpoints for CapitalDotComAPI {
                 ("from", from),
                 ("to", to),
             ])
-            .headers(self.auth_header_map.clone())
-            .send()
-            .await
-        {
-            Ok(response) => Ok(response),
-            Err(e) => Err(CapitalDotComError::ReqwestError(e)),
-        }
+            .headers(self.auth_header_map.clone());
+
+        Self::request_data(request_builder).await
     }
 
     fn has_credentials<T>(&self) -> Result<(), CapitalDotComError<T>> {
@@ -485,7 +519,7 @@ pub enum SessionType {
 pub enum CapitalDotComError<ErrD> {
     ReqwestError(reqwest::Error),
     JsonError(serde_json::Error),
-    StatusCode(StatusCode, ErrD),
+    StatusCode(u16, ErrD),
     HeaderNotFound,
     FromUtf8Error(FromUtf8Error),
     TooManyParameters,

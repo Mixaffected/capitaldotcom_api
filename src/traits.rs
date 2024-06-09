@@ -1,24 +1,16 @@
-use reqwest::header::HeaderMap;
+use std::collections::HashMap;
+
+use reqwest::RequestBuilder;
 use serde::Deserialize;
 
 use crate::*;
 
-pub trait Reqwest {
-    fn get_status_code(data: &reqwest::Response) -> StatusCode {
-        data.status()
-    }
-
-    fn get_headers(data: &reqwest::Response) -> HeaderMap {
-        data.headers().to_owned()
-    }
-
+pub trait ReqwestUtils {
     async fn get_body<T: for<'a> Deserialize<'a>>(
-        data: reqwest::Response,
+        response: reqwest::Response,
     ) -> Result<T, CapitalDotComError<T>> {
-        let status_code = data.status();
-
         // get body
-        let body_raw = match data.text().await {
+        let body_raw = match response.text().await {
             Ok(body) => body,
             Err(e) => return Err(CapitalDotComError::ReqwestError(e)),
         };
@@ -29,11 +21,6 @@ pub trait Reqwest {
             Err(e) => return Err(CapitalDotComError::JsonError(e)),
         };
 
-        // check status
-        if status_code != StatusCode::OK {
-            return Err(CapitalDotComError::StatusCode(status_code, body));
-        }
-
         Ok(body)
     }
 
@@ -43,6 +30,23 @@ pub trait Reqwest {
             Ok(json) => Ok(json),
             Err(e) => Err(CapitalDotComError::JsonError(e)),
         }
+    }
+
+    async fn headers_to_hashmap(headers: HeaderMap) -> HashMap<String, String> {
+        let mut hash_map = HashMap::new();
+        for (header_name, header_value) in headers {
+            let header_name = match header_name {
+                Some(header_name) => header_name,
+                None => continue,
+            };
+
+            hash_map.insert(
+                header_name.to_string(),
+                String::from_utf8_lossy(header_value.as_bytes()).to_string(),
+            );
+        }
+
+        hash_map
     }
 }
 
@@ -73,64 +77,178 @@ pub trait CapitalDotComInterface {
     fn get_historical_prices(&self);
 }
 
-pub trait CapitalDotComEndpoints {
-    async fn get_server_time(&self) -> Result<Response, CapitalDotComError<Response>>;
+pub trait CapitalDotComEndpoints: ReqwestUtils {
+    async fn get_server_time(
+        &self,
+    ) -> Result<
+        (u16, HashMap<String, String>, responses::ServerTimeResponse),
+        CapitalDotComError<responses::ServerTimeResponse>,
+    >;
 
-    async fn ping(&self) -> Result<Response, CapitalDotComError<Response>>;
+    async fn ping(
+        &self,
+    ) -> Result<
+        (u16, HashMap<String, String>, responses::PingResponse),
+        CapitalDotComError<responses::PingResponse>,
+    >;
 
-    async fn get_encryption_key(&self) -> Result<Response, CapitalDotComError<Response>>;
+    async fn get_encryption_key(
+        &self,
+    ) -> Result<
+        (
+            u16,
+            HashMap<String, String>,
+            responses::EncryptionKeyResponse,
+        ),
+        CapitalDotComError<responses::EncryptionKeyResponse>,
+    >;
 
-    async fn get_session_details(&self) -> Result<Response, CapitalDotComError<Response>>;
+    async fn get_session_details(
+        &self,
+    ) -> Result<
+        (
+            u16,
+            HashMap<String, String>,
+            responses::SessionDetailsResponse,
+        ),
+        CapitalDotComError<responses::SessionDetailsResponse>,
+    >;
 
-    async fn create_new_session(&mut self) -> Result<Response, CapitalDotComError<Response>>;
+    async fn create_new_session(
+        &mut self,
+    ) -> Result<
+        (
+            u16,
+            HashMap<String, String>,
+            responses::CreateNewSessionResponse,
+        ),
+        CapitalDotComError<responses::CreateNewSessionResponse>,
+    >;
 
     async fn switch_active_account(
         &self,
         account_id: String,
-    ) -> Result<Response, CapitalDotComError<Response>>;
+    ) -> Result<
+        (
+            u16,
+            HashMap<String, String>,
+            responses::SwitchAccountResponse,
+        ),
+        CapitalDotComError<responses::SwitchAccountResponse>,
+    >;
 
-    async fn session_log_out(&self) -> Result<Response, CapitalDotComError<Response>>;
+    async fn session_log_out(
+        &self,
+    ) -> Result<
+        (
+            u16,
+            HashMap<String, String>,
+            responses::SessionLogOutResponse,
+        ),
+        CapitalDotComError<responses::SessionLogOutResponse>,
+    >;
 
-    async fn get_all_accounts(&self) -> Result<Response, CapitalDotComError<Response>>;
+    async fn get_all_accounts(
+        &self,
+    ) -> Result<
+        (u16, HashMap<String, String>, responses::AllAccountsResponse),
+        CapitalDotComError<responses::AllAccountsResponse>,
+    >;
 
     /// Check if order was accepted
     async fn order_confirmation(
         &self,
         deal_reference: String,
-    ) -> Result<Response, CapitalDotComError<Response>>;
+    ) -> Result<
+        (
+            u16,
+            HashMap<String, String>,
+            responses::OrderConfirmationResponse,
+        ),
+        CapitalDotComError<responses::OrderConfirmationResponse>,
+    >;
 
-    async fn get_all_positions(&self) -> Result<Response, CapitalDotComError<Response>>;
+    async fn get_all_positions(
+        &self,
+    ) -> Result<
+        (
+            u16,
+            HashMap<String, String>,
+            responses::AllPositionsResponse,
+        ),
+        CapitalDotComError<responses::AllPositionsResponse>,
+    >;
 
     async fn create_position(
         &self,
         position_data: request_bodies::CreatePositionBody,
-    ) -> Result<Response, CapitalDotComError<Response>>;
+    ) -> Result<
+        (
+            u16,
+            HashMap<String, String>,
+            responses::DealReferenceResponse,
+        ),
+        CapitalDotComError<responses::DealReferenceResponse>,
+    >;
 
-    async fn get_position(&self, deal_id: String)
-        -> Result<Response, CapitalDotComError<Response>>;
+    async fn get_position(
+        &self,
+        deal_id: String,
+    ) -> Result<
+        (u16, HashMap<String, String>, responses::PositionResponse),
+        CapitalDotComError<responses::PositionResponse>,
+    >;
 
     async fn update_position(
         &self,
         deal_id: String,
         position_update_data: request_bodies::PositionUpdateBody,
-    ) -> Result<Response, CapitalDotComError<Response>>;
+    ) -> Result<
+        (
+            u16,
+            HashMap<String, String>,
+            responses::DealReferenceResponse,
+        ),
+        CapitalDotComError<responses::DealReferenceResponse>,
+    >;
 
     async fn close_position(
         &self,
         deal_id: String,
-    ) -> Result<Response, CapitalDotComError<Response>>;
+    ) -> Result<
+        (
+            u16,
+            HashMap<String, String>,
+            responses::DealReferenceResponse,
+        ),
+        CapitalDotComError<responses::DealReferenceResponse>,
+    >;
 
     async fn get_market_details(
         &self,
         search_term: String,
         epics: Vec<String>,
-    ) -> Result<Response, CapitalDotComError<Response>>;
+    ) -> Result<
+        (
+            u16,
+            HashMap<String, String>,
+            responses::MarketDetailsResponse,
+        ),
+        CapitalDotComError<responses::MarketDetailsResponse>,
+    >;
 
     /// Get detail from one market (Tesla for example)
     async fn single_market_details(
         &self,
         epic: String,
-    ) -> Result<Response, CapitalDotComError<Response>>;
+    ) -> Result<
+        (
+            u16,
+            HashMap<String, String>,
+            responses::SingleMarketDetailsResponse,
+        ),
+        CapitalDotComError<responses::SingleMarketDetailsResponse>,
+    >;
 
     /// from is the Start date. Date format: YYYY-MM-DDTHH:MM:SS (e.g. 2022-04-01T01:01:00). Filtration by date based on snapshotTimeUTC parameter.
     /// to is the End date. Date format: YYYY-MM-DDTHH:MM:SS (e.g. 2022-04-01T01:01:00). Filtration by date based on snapshotTimeUTC parameter.
@@ -141,7 +259,34 @@ pub trait CapitalDotComEndpoints {
         max: i32,
         from: String,
         to: String,
-    ) -> Result<Response, CapitalDotComError<Response>>;
+    ) -> Result<
+        (
+            u16,
+            HashMap<String, String>,
+            responses::HistoricalPricesResponse,
+        ),
+        CapitalDotComError<responses::HistoricalPricesResponse>,
+    >;
 
     fn has_credentials<T>(&self) -> Result<(), CapitalDotComError<T>>;
+
+    /// Unwrap the response of the API to the status code, headers and the body that will be casted into the fitting response struct.
+    async fn request_data<T: for<'a> Deserialize<'a>>(
+        request_builder: RequestBuilder,
+    ) -> Result<(u16, HashMap<String, String>, T), CapitalDotComError<T>> {
+        let response = match request_builder.send().await {
+            Ok(response) => response,
+            Err(e) => return Err(CapitalDotComError::ReqwestError(e)),
+        };
+
+        let headers = Self::headers_to_hashmap(response.headers().to_owned());
+        let status = response.status().as_u16();
+        let body = Self::get_body(response).await?;
+
+        if status == 200 {
+            Ok((status, headers.await, body))
+        } else {
+            return Err(CapitalDotComError::StatusCode(status, body));
+        }
+    }
 }
