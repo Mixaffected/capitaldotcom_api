@@ -40,7 +40,7 @@ impl CapitalDotComApiEndpoints {
             password,
             encryption_key: String::new(),
             auth_header_map: HeaderMap::new(),
-            last_request_timestamp: chrono::Utc::now(),
+            last_request_timestamp: chrono::Utc::now() - chrono::Duration::milliseconds(5000),
             http_client: reqwest::Client::new(),
         }
     }
@@ -94,7 +94,7 @@ impl CapitalDotComApiEndpoints {
 
     fn next_request_available(&self, required_timeout_ms: u32) -> Result<(), CapitalDotComError> {
         let time_delta = self.get_time_since_last_request();
-        if time_delta < chrono::TimeDelta::milliseconds(100) {
+        if time_delta < chrono::TimeDelta::milliseconds(required_timeout_ms as i64) {
             Ok(())
         } else {
             Err(CapitalDotComError::RequestingTooFast(time_delta))
