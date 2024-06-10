@@ -172,9 +172,10 @@ impl traits::CapitalDotComEndpoints for CapitalDotComApiEndpoints {
 
         let request_builder = self
             .http_client
-            .post(Self::get_url(&self, "/api/v1/session/encryptionKey"))
+            .post(Self::get_url(&self, "/api/v1/session"))
             .header("X-CAP-API-KEY", &self.x_cap_api_key);
 
+        println!("{:?}", request_builder);
         let (headers, body) = Self::request_data(request_builder).await?;
 
         // Update authorization values
