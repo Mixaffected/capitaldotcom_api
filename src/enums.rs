@@ -52,13 +52,14 @@ pub enum Unit {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Resolution {
     MINUTE,
-    MINUTE_5,
-    MINUTE_15,
-    MINUTE_30,
+    Minute5,
+    Minute15,
+    Minute30,
     HOUR,
-    HOUR_4,
+    Hour4,
     DAY,
     WEEK,
 }
