@@ -94,7 +94,7 @@ impl CapitalDotComApiEndpoints {
 
     fn next_request_available(&self, required_timeout_ms: u32) -> Result<(), CapitalDotComError> {
         let time_delta = self.get_time_since_last_request();
-        if time_delta < chrono::TimeDelta::milliseconds(required_timeout_ms as i64) {
+        if time_delta > chrono::TimeDelta::milliseconds(required_timeout_ms as i64) {
             Ok(())
         } else {
             Err(CapitalDotComError::RequestingTooFast(time_delta))
