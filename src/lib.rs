@@ -2,7 +2,6 @@ use std::{
     fmt::Display,
     string::FromUtf8Error,
     sync::{Arc, Mutex},
-    thread, time,
 };
 
 use reqwest::header::HeaderMap;
@@ -21,8 +20,6 @@ pub use traits::CapitalDotComInterface;
 
 use endpoint::CapitalDotComApiEndpoints;
 use traits::CapitalDotComEndpoints;
-
-const TIME_BEFORE_LOGOUT: u32 = 600_000;
 
 /// Limitations:
 ///  * Max of 10 requests per second
