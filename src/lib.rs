@@ -317,9 +317,10 @@ impl Display for CapitalDotComError {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
+    use std::{fs, thread, time};
 
-    use serde::{Deserialize, Serialize};
+    use responses::Status;
+    use serde::{de, Deserialize, Serialize};
 
     use super::*;
 
@@ -352,6 +353,9 @@ mod tests {
 
         let session_details = capital_api.open_session().unwrap();
 
+        let all_accounts = capital_api.get_all_accounts().unwrap();
+        println!("{:?}", all_accounts);
+
         // Select right account
         let mut account_id = String::new();
         for account in session_details.accounts {
@@ -365,7 +369,7 @@ mod tests {
 
         let balance = capital_api.get_balance().unwrap();
         println!(
-            "Balance:\n  Balance: {},\n  Deposit: {},\n  P/L: {},\n  Available: {}",
+            "Balance:\n  Balance: {},\n  Deposit: {},\n  P/L: {},\n  Available: {}\n\n",
             balance.balance, balance.deposit, balance.profit_loss, balance.available
         );
 
@@ -376,10 +380,10 @@ mod tests {
                 epic = market.epic;
             };
         }
-        println!("Epic: {}", epic);
+        println!("Epic: {}\n\n", epic);
 
         let market = capital_api.get_market_data(&epic).unwrap();
-        println!("{:?}", market);
+        println!("{:?}\n\n", market);
 
         let position_data = request_bodies::CreatePositionBodyBuilder::new(
             Direction::SELL,
@@ -388,19 +392,22 @@ mod tests {
         )
         .build();
         let deal_reference = capital_api.open_position(position_data).unwrap();
-        println!("Order: {:?}", deal_reference);
+        println!("Order: {:?}\n\n", deal_reference);
 
         let all_positions = capital_api.get_all_positions().unwrap();
-        println!("{:?}", all_positions);
+        println!("{:?}\n\n", all_positions);
 
         let session_details = capital_api.get_session_details().unwrap();
-        println!("{:?}", session_details);
+        println!("{:?}\n\n", session_details);
+
+        let position = capital_api.position_data(&deal_reference.deal_id).unwrap(); // TODO: Fix this shi..
+        println!("{:?}\n\n", position);
 
         for position in all_positions.positions {
             let deal_reference = capital_api
                 .close_position(&position.position.deal_id)
                 .unwrap();
-            println!("{:?}", deal_reference);
+            println!("{:?}\n\n", deal_reference);
         }
 
         let history = capital_api
@@ -412,10 +419,10 @@ mod tests {
                 chrono::DateTime::from_timestamp_millis(1718117176000).unwrap(),
             )
             .unwrap();
-        println!("{:?}", history);
+        println!("{:?}\n\n", history);
 
         let session_logout = capital_api.close_session().unwrap();
-        println!("{:?}", session_logout);
+        println!("{:?}\n\n", session_logout);
 
         println!("\n\n\n");
     }
