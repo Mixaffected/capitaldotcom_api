@@ -346,4 +346,5 @@ pub enum Status {
 #[derive(Debug, Deserialize)]
 pub enum DealStatus {
     ACCEPTED,
+    DECLINED,
 }
