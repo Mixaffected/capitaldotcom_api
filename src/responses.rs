@@ -76,7 +76,6 @@ pub struct SessionDetailsResponse {
     pub locale: enums::Locale,
     pub currency: enums::Currency,
     pub stream_endpoint: String,
-    pub profit_loss: f32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -153,17 +152,17 @@ pub struct PositionResponse {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PositionData {
-    pub contract_size: f64,
+    pub contract_size: i32,
     pub created_date: String,
-    pub created_date_utc: String,
+    pub created_date_UTC: String,
     pub deal_id: String,
     pub deal_reference: String,
     pub working_order_id: String,
-    pub size: i64,
+    pub size: f32,
     pub leverage: i8,
-    pub upl: f64,
+    pub upl: f32,
     pub direction: enums::Direction,
-    pub level: f64,
+    pub level: f32,
     pub currency: enums::Currency,
     pub guaranteed_stop: bool,
 }
@@ -178,17 +177,17 @@ pub struct MarketPosition {
     pub symbol: String,
     pub instrument_type: enums::InstrumentType,
     pub lot_size: i32,
-    pub high: f64,
-    pub low: f64,
-    pub percentage_change: f64,
-    pub net_change: f64,
-    pub bid: f64,
-    pub offer: f64,
+    pub high: f32,
+    pub low: f32,
+    pub percentage_change: f32,
+    pub net_change: f32,
+    pub bid: f32,
+    pub offer: f32,
     pub update_time: String,
-    pub update_time_utc: String,
-    pub delay_time: f64,
+    pub update_time_UTC: String,
+    pub delay_time: f32,
     pub streaming_prices_available: bool,
-    pub scaling_factor: i32,
+    pub scaling_factor: f32,
     pub market_modes: Vec<String>,
 }
 
@@ -207,7 +206,7 @@ pub struct Market {
     pub low: f64,
     pub percentage_change: f64,
     pub update_time: String,
-    pub update_time_utc: String,
+    pub update_time_UTC: String,
     pub bid: f64,
     pub offer: f64,
     pub streaming_prices_available: bool,
@@ -302,7 +301,7 @@ pub struct OvernightFee {
 #[serde(rename_all = "camelCase")]
 pub struct UnitValue {
     pub unit: enums::Unit,
-    pub value: f64,
+    pub value: f32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -316,7 +315,7 @@ pub struct HistoricalPricesResponse {
 #[serde(rename_all = "camelCase")]
 pub struct Prices {
     pub snapshot_time: String,
-    pub snapshot_time_utc: String,
+    pub snapshot_time_UTC: String,
     pub open_price: Price,
     pub close_price: Price,
     pub high_price: Price,
@@ -334,12 +333,14 @@ pub struct Price {
 #[derive(Debug, Deserialize)]
 pub enum MarketStatus {
     TRADEABLE,
+    CLOSED,
 }
 
 #[derive(Debug, Deserialize)]
 pub enum Status {
     OPEN,
-    OK,
+    OPENED,
+    PENDING,
 }
 
 #[derive(Debug, Deserialize)]

@@ -16,6 +16,7 @@ mod request_bodies;
 mod traits;
 
 pub use endpoint::SessionType;
+pub use enums::{Direction, Resolution};
 pub use traits::CapitalDotComInterface;
 
 use endpoint::CapitalDotComApiEndpoints;
@@ -39,6 +40,8 @@ pub struct CapitalDotComAPI {
     is_logged_in: Arc<Mutex<bool>>,
     capital_dot_com_endpoints: Arc<Mutex<endpoint::CapitalDotComApiEndpoints>>,
     runtime: tokio::runtime::Runtime,
+
+    current_account_id: String,
 }
 impl CapitalDotComAPI {
     pub fn new(
@@ -61,42 +64,9 @@ impl CapitalDotComAPI {
                 password,
             ))),
             runtime,
+
+            current_account_id: String::new(),
         }
-    }
-
-    fn keep_session_alive_service(&self) {
-        let is_logged_in_c = self.is_logged_in.clone();
-        let capital_dot_com_endpoints_c = self.capital_dot_com_endpoints.clone();
-        let runtime = tokio::runtime::Runtime::new().expect("Could not create Tokio runtime!");
-
-        thread::spawn(move || loop {
-            thread::sleep(time::Duration::from_millis(200));
-
-            {
-                let is_logged_in_lock = is_logged_in_c.lock().unwrap_or_else(|p| p.into_inner());
-                if !*is_logged_in_lock {
-                    return;
-                };
-            }
-
-            {
-                let mut capital_dot_com_endpoints_lock = capital_dot_com_endpoints_c
-                    .lock()
-                    .unwrap_or_else(|p| p.into_inner());
-
-                let time_since_last_request =
-                    capital_dot_com_endpoints_lock.get_time_since_last_request();
-
-                if time_since_last_request
-                    > chrono::TimeDelta::milliseconds((TIME_BEFORE_LOGOUT as f32 * 0.9) as i64)
-                {
-                    match runtime.block_on(capital_dot_com_endpoints_lock.ping()) {
-                        Ok(_) => (),
-                        Err(e) => println!("Could not ping server! Error: {}", e),
-                    };
-                };
-            }
-        });
     }
 }
 
@@ -111,7 +81,7 @@ impl traits::CapitalDotComInterface for CapitalDotComAPI {
             .runtime
             .block_on(capital_dot_com_endpoints_lock.create_new_session())?;
 
-        self.keep_session_alive_service();
+        self.current_account_id = body.current_account_id.clone();
 
         Ok(body)
     }
@@ -132,6 +102,25 @@ impl traits::CapitalDotComInterface for CapitalDotComAPI {
         Ok(body)
     }
 
+    fn get_balance(&self) -> Result<responses::BalanceAccountInfo, CapitalDotComError> {
+        let mut capital_dot_com_endpoints_lock = self
+            .capital_dot_com_endpoints
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+
+        let (_, body) = self
+            .runtime
+            .block_on(capital_dot_com_endpoints_lock.get_all_accounts())?;
+
+        for account in body.accounts {
+            if account.account_id == self.current_account_id {
+                return Ok(account.balance);
+            }
+        }
+
+        Err(CapitalDotComError::CurrentAccountNotFound)
+    }
+
     fn get_all_accounts(&self) -> Result<responses::AllAccountsResponse, CapitalDotComError> {
         let mut capital_dot_com_endpoints_lock = self
             .capital_dot_com_endpoints
@@ -147,8 +136,12 @@ impl traits::CapitalDotComInterface for CapitalDotComAPI {
 
     fn switch_account(
         &mut self,
-        account_id: String,
+        account_id: &str,
     ) -> Result<responses::SwitchAccountResponse, CapitalDotComError> {
+        if account_id == self.current_account_id {
+            return Err(CapitalDotComError::NotDifferentAccountId);
+        }
+
         let mut capital_dot_com_endpoints_lock = self
             .capital_dot_com_endpoints
             .lock()
@@ -157,6 +150,8 @@ impl traits::CapitalDotComInterface for CapitalDotComAPI {
         let (_, body) = self
             .runtime
             .block_on(capital_dot_com_endpoints_lock.switch_active_account(account_id))?;
+
+        self.current_account_id = account_id.to_string();
 
         Ok(body)
     }
@@ -179,7 +174,7 @@ impl traits::CapitalDotComInterface for CapitalDotComAPI {
 
     fn search_market(
         &self,
-        search_term: String,
+        search_term: &str,
         epic: Vec<String>,
     ) -> Result<responses::MarketDetailsResponse, CapitalDotComError> {
         let mut capital_dot_com_endpoints_lock = self
@@ -196,7 +191,7 @@ impl traits::CapitalDotComInterface for CapitalDotComAPI {
 
     fn get_market_data(
         &self,
-        epic: String,
+        epic: &str,
     ) -> Result<responses::SingleMarketDetailsResponse, CapitalDotComError> {
         let mut capital_dot_com_endpoints_lock = self
             .capital_dot_com_endpoints
@@ -205,7 +200,7 @@ impl traits::CapitalDotComInterface for CapitalDotComAPI {
 
         let (_, body) = self
             .runtime
-            .block_on(capital_dot_com_endpoints_lock.get_single_market_details(epic))?;
+            .block_on(capital_dot_com_endpoints_lock.get_single_market_details(epic.to_string()))?;
 
         Ok(body)
     }
@@ -226,7 +221,7 @@ impl traits::CapitalDotComInterface for CapitalDotComAPI {
     fn open_position(
         &self,
         position_data: request_bodies::CreatePositionBody,
-    ) -> Result<responses::DealReferenceResponse, CapitalDotComError> {
+    ) -> Result<responses::OrderConfirmationResponse, CapitalDotComError> {
         let mut capital_dot_com_endpoints_lock = self
             .capital_dot_com_endpoints
             .lock()
@@ -236,12 +231,16 @@ impl traits::CapitalDotComInterface for CapitalDotComAPI {
             .runtime
             .block_on(capital_dot_com_endpoints_lock.open_position(position_data))?;
 
+        let (_, body) = self
+            .runtime
+            .block_on(capital_dot_com_endpoints_lock.order_confirmation(&body.deal_reference))?;
+
         Ok(body)
     }
 
     fn position_data(
         &self,
-        deal_id: String,
+        deal_id: &str,
     ) -> Result<responses::PositionResponse, CapitalDotComError> {
         let mut capital_dot_com_endpoints_lock = self
             .capital_dot_com_endpoints
@@ -250,14 +249,14 @@ impl traits::CapitalDotComInterface for CapitalDotComAPI {
 
         let (_, body) = self
             .runtime
-            .block_on(capital_dot_com_endpoints_lock.get_position(deal_id))?;
+            .block_on(capital_dot_com_endpoints_lock.get_position(deal_id.to_string()))?;
 
         Ok(body)
     }
 
     fn close_position(
         &self,
-        deal_id: String,
+        deal_id: &str,
     ) -> Result<responses::DealReferenceResponse, CapitalDotComError> {
         let mut capital_dot_com_endpoints_lock = self
             .capital_dot_com_endpoints
@@ -266,16 +265,17 @@ impl traits::CapitalDotComInterface for CapitalDotComAPI {
 
         let (_, body) = self
             .runtime
-            .block_on(capital_dot_com_endpoints_lock.close_position(deal_id))?;
+            .block_on(capital_dot_com_endpoints_lock.close_position(deal_id.to_string()))?;
 
         Ok(body)
     }
 
+    /// * max: The maximum number of the values in answer. Default = 10, max = 1000
     fn get_historical_prices(
         &self,
-        epic: String,
+        epic: &str,
         resolution: enums::Resolution,
-        max: i32,
+        max: Option<i32>,
         from: chrono::DateTime<chrono::Utc>,
         to: chrono::DateTime<chrono::Utc>,
     ) -> Result<responses::HistoricalPricesResponse, CapitalDotComError> {
@@ -284,9 +284,15 @@ impl traits::CapitalDotComInterface for CapitalDotComAPI {
             .lock()
             .unwrap_or_else(|p| p.into_inner());
 
-        let (_, body) = self.runtime.block_on(
-            capital_dot_com_endpoints_lock.get_historical_prices(epic, resolution, max, from, to),
-        )?;
+        let (_, body) =
+            self.runtime
+                .block_on(capital_dot_com_endpoints_lock.get_historical_prices(
+                    epic.to_string(),
+                    resolution,
+                    max,
+                    from,
+                    to,
+                ))?;
 
         Ok(body)
     }
@@ -303,6 +309,8 @@ pub enum CapitalDotComError {
     Unauthorized,
     MissingAuthorization,
     RequestingTooFast(chrono::TimeDelta),
+    CurrentAccountNotFound,
+    NotDifferentAccountId,
 }
 impl Display for CapitalDotComError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -315,7 +323,6 @@ mod tests {
     use std::fs;
 
     use serde::{Deserialize, Serialize};
-    use tokio::runtime::Runtime;
 
     use super::*;
 
@@ -324,6 +331,7 @@ mod tests {
         pub identifier: String,
         pub api_key: String,
         pub api_password: String,
+        pub test_account_name: String,
     }
 
     fn get_api_credentials() -> Credentials {
@@ -335,6 +343,8 @@ mod tests {
 
     #[test]
     fn full_test() {
+        println!("\n\n\n");
+
         let credentials = get_api_credentials();
         let mut capital_api = CapitalDotComAPI::new(
             SessionType::Demo, // For the sake of god, dont change this to live.
@@ -344,5 +354,72 @@ mod tests {
         );
 
         let session_details = capital_api.open_session().unwrap();
+
+        // Select right account
+        let mut account_id = String::new();
+        for account in session_details.accounts {
+            if account.account_name == credentials.test_account_name {
+                account_id = account.account_id;
+            };
+        }
+        if account_id != session_details.current_account_id {
+            capital_api.switch_account(&account_id).unwrap();
+        }
+
+        let balance = capital_api.get_balance().unwrap();
+        println!(
+            "Balance:\n  Balance: {},\n  Deposit: {},\n  P/L: {},\n  Available: {}",
+            balance.balance, balance.deposit, balance.profit_loss, balance.available
+        );
+
+        let markets = capital_api.search_market("Tesla", Vec::new()).unwrap();
+        let mut epic = String::new();
+        for market in markets.markets {
+            if market.instrument_name.contains("Tesla") {
+                epic = market.epic;
+            };
+        }
+        println!("Epic: {}", epic);
+
+        let market = capital_api.get_market_data(&epic).unwrap();
+        println!("{:?}", market);
+
+        let position_data = request_bodies::CreatePositionBodyBuilder::new(
+            Direction::SELL,
+            &epic,
+            market.dealing_rules.min_deal_size.value * 10.,
+        )
+        .build();
+        let deal_reference = capital_api.open_position(position_data).unwrap();
+        println!("Order: {:?}", deal_reference);
+
+        let all_positions = capital_api.get_all_positions().unwrap();
+        println!("{:?}", all_positions);
+
+        let session_details = capital_api.get_session_details().unwrap();
+        println!("{:?}", session_details);
+
+        for position in all_positions.positions {
+            let deal_reference = capital_api
+                .close_position(&position.position.deal_id)
+                .unwrap();
+            println!("{:?}", deal_reference);
+        }
+
+        let history = capital_api
+            .get_historical_prices(
+                &epic,
+                Resolution::HOUR,
+                Some(2),
+                chrono::DateTime::from_timestamp_millis(1718109976000).unwrap(),
+                chrono::DateTime::from_timestamp_millis(1718117176000).unwrap(),
+            )
+            .unwrap();
+        println!("{:?}", history);
+
+        let session_logout = capital_api.close_session().unwrap();
+        println!("{:?}", session_logout);
+
+        println!("\n\n\n");
     }
 }

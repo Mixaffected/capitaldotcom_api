@@ -1,4 +1,4 @@
-use std::{collections::HashMap, os::unix::fs::chroot};
+use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
 use reqwest::RequestBuilder;
@@ -76,12 +76,14 @@ pub trait CapitalDotComInterface {
     /// Get informations about the current account
     fn get_session_details(&self) -> Result<responses::SessionDetailsResponse, CapitalDotComError>;
 
+    fn get_balance(&self) -> Result<responses::BalanceAccountInfo, CapitalDotComError>;
+
     fn get_all_accounts(&self) -> Result<responses::AllAccountsResponse, CapitalDotComError>;
 
     /// Switch the trading account
     fn switch_account(
         &mut self,
-        account_id: String,
+        account_id: &str,
     ) -> Result<responses::SwitchAccountResponse, CapitalDotComError>;
 
     /// Log out of the session
@@ -89,14 +91,14 @@ pub trait CapitalDotComInterface {
 
     fn search_market(
         &self,
-        search_term: String,
+        search_term: &str,
         epic: Vec<String>,
     ) -> Result<responses::MarketDetailsResponse, CapitalDotComError>;
 
     /// Get current bid and ask prices and other market data
     fn get_market_data(
         &self,
-        epic: String,
+        epic: &str,
     ) -> Result<responses::SingleMarketDetailsResponse, CapitalDotComError>;
 
     fn get_all_positions(&self) -> Result<responses::AllPositionsResponse, CapitalDotComError>;
@@ -104,23 +106,23 @@ pub trait CapitalDotComInterface {
     fn open_position(
         &self,
         position_data: request_bodies::CreatePositionBody,
-    ) -> Result<responses::DealReferenceResponse, CapitalDotComError>;
+    ) -> Result<responses::OrderConfirmationResponse, CapitalDotComError>;
 
     fn position_data(
         &self,
-        deal_id: String,
+        deal_id: &str,
     ) -> Result<responses::PositionResponse, CapitalDotComError>;
 
     fn close_position(
         &self,
-        deal_id: String,
+        deal_id: &str,
     ) -> Result<responses::DealReferenceResponse, CapitalDotComError>;
 
     fn get_historical_prices(
         &self,
-        epic: String,
+        epic: &str,
         resolution: enums::Resolution,
-        max: i32,
+        max: Option<i32>,
         from: chrono::DateTime<chrono::Utc>,
         to: chrono::DateTime<chrono::Utc>,
     ) -> Result<responses::HistoricalPricesResponse, CapitalDotComError>;
@@ -153,7 +155,7 @@ pub trait CapitalDotComEndpoints: ReqwestUtils {
 
     async fn switch_active_account(
         &mut self,
-        account_id: String,
+        account_id: &str,
     ) -> Result<(HashMap<String, String>, responses::SwitchAccountResponse), CapitalDotComError>;
 
     async fn session_log_out(
@@ -163,7 +165,7 @@ pub trait CapitalDotComEndpoints: ReqwestUtils {
     /// Check if order was accepted
     async fn order_confirmation(
         &mut self,
-        deal_reference: String,
+        deal_reference: &str,
     ) -> Result<
         (
             HashMap<String, String>,
@@ -199,7 +201,7 @@ pub trait CapitalDotComEndpoints: ReqwestUtils {
 
     async fn get_market_details(
         &mut self,
-        search_term: String,
+        search_term: &str,
         epics: Vec<String>,
     ) -> Result<(HashMap<String, String>, responses::MarketDetailsResponse), CapitalDotComError>;
 
@@ -221,7 +223,7 @@ pub trait CapitalDotComEndpoints: ReqwestUtils {
         &mut self,
         epic: String,
         resolution: enums::Resolution,
-        max: i32,
+        max: Option<i32>,
         from: DateTime<Utc>,
         to: DateTime<Utc>,
     ) -> Result<(HashMap<String, String>, responses::HistoricalPricesResponse), CapitalDotComError>;

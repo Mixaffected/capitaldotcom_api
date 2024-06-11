@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize)]
 pub enum InstrumentType {
     COMMODITIES,
+    SHARES,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -23,6 +24,7 @@ pub enum Currency {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Locale {
     EN,
     DE,
@@ -39,6 +41,14 @@ pub enum Direction {
     BUY,
     SELL,
 }
+impl Clone for Direction {
+    fn clone(&self) -> Self {
+        match self {
+            Self::BUY => Self::BUY,
+            Self::SELL => Self::SELL,
+        }
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum TimeZone {
@@ -52,7 +62,6 @@ pub enum Unit {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Resolution {
     MINUTE,
     Minute5,
@@ -62,4 +71,18 @@ pub enum Resolution {
     Hour4,
     DAY,
     WEEK,
+}
+impl ToString for Resolution {
+    fn to_string(&self) -> String {
+        match self {
+            Self::MINUTE => String::from("MINUTE"),
+            Self::Minute5 => String::from("MINUTE_5"),
+            Self::Minute15 => String::from("MINUTE_15"),
+            Self::Minute30 => String::from("MINUTE_30"),
+            Self::HOUR => String::from("HOUR"),
+            Self::Hour4 => String::from("HOUR_4"),
+            Self::DAY => String::from("DAY"),
+            Self::WEEK => String::from("WEEK"),
+        }
+    }
 }
