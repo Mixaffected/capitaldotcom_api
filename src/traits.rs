@@ -108,7 +108,7 @@ pub trait CapitalDotComInterface {
         position_data: request_bodies::CreatePositionBody,
     ) -> Result<responses::OrderConfirmationResponse, CapitalDotComError>;
 
-    fn position_data(
+    fn get_position_data(
         &self,
         deal_id: &str,
     ) -> Result<responses::PositionResponse, CapitalDotComError>;

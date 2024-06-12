@@ -235,7 +235,8 @@ impl traits::CapitalDotComInterface for CapitalDotComAPI {
         Ok(body)
     }
 
-    fn position_data(
+    /// CURRENTLY DOES NOT WORK
+    fn get_position_data(
         &self,
         deal_id: &str,
     ) -> Result<responses::PositionResponse, CapitalDotComError> {
@@ -317,10 +318,9 @@ impl Display for CapitalDotComError {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, thread, time};
+    use std::fs;
 
-    use responses::Status;
-    use serde::{de, Deserialize, Serialize};
+    use serde::{Deserialize, Serialize};
 
     use super::*;
 
@@ -400,7 +400,9 @@ mod tests {
         let session_details = capital_api.get_session_details().unwrap();
         println!("{:?}\n\n", session_details);
 
-        let position = capital_api.position_data(&deal_reference.deal_id).unwrap(); // TODO: Fix this shi..
+        let position = capital_api
+            .get_position_data(&deal_reference.deal_id)
+            .unwrap(); // TODO: Fix this shi..
         println!("{:?}\n\n", position);
 
         for position in all_positions.positions {
