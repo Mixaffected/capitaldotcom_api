@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -47,6 +49,16 @@ impl Clone for Direction {
             Self::BUY => Self::BUY,
             Self::SELL => Self::SELL,
         }
+    }
+}
+impl Display for Direction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let string = match self {
+            Self::BUY => "BUY",
+            Self::SELL => "SELL",
+        };
+        
+        write!(f, "{}", string)
     }
 }
 
