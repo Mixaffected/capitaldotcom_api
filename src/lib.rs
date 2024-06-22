@@ -7,11 +7,11 @@ use std::{
 use reqwest::header::HeaderMap;
 use serde::Serialize;
 
-mod responses;
+pub mod responses;
+pub mod request_bodies;
 
 mod endpoint;
 mod enums;
-mod request_bodies;
 mod traits;
 
 pub use endpoint::SessionType;
